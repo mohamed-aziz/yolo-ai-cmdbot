@@ -49,19 +49,6 @@ def get_full_prompt(user_prompt, shell):
 
   return prompt
 
-def print_usage():
-  print("Yolo v0.2.1 - by @wunderwuzzi23")
-  print()
-  print("Usage: yolo [-a] list the current directory information")
-  print("Argument: -a: Prompt the user before running the command (only useful when safety is off)")
-  print()
-
-  print("Current configuration per yolo.yaml:")
-  print("* Model        : " + str(config["model"]))
-  print("* Temperature  : " + str(config["temperature"]))
-  print("* Max. Tokens  : " + str(config["max_tokens"]))
-  print("* Safety       : " + str(bool(config["safety"])))
-
 
 def get_os_friendly_name():
   
@@ -98,61 +85,6 @@ def set_api_key():
   if not openai.api_key:  
     openai.api_key = config["openai_api_key"]
 
-if __name__ == "__main__":
-
-  config = read_config()
-  set_api_key()
-
-  # Unix based SHELL (/bin/bash, /bin/zsh), otherwise assuming it's Windows
-  shell = os.environ.get("SHELL", "powershell.exe") 
-
-  command_start_idx  = 1     # Question starts at which argv index?
-  ask_flag = False           # safety switch -a command line argument
-  yolo = ""                  # user's answer to safety switch (-a) question y/n
-
-  # Parse arguments and make sure we have at least a single word
-  if len(sys.argv) < 2:
-    print_usage()
-    sys.exit(-1)
-
-  # Safety switch via argument -a (local override of global setting)
-  # Force Y/n questions before running the command
-  if sys.argv[1] == "-a":
-    ask_flag = True
-    command_start_idx = 2
-
-  # To allow easy/natural use we don't require the input to be a 
-  # single string. So, the user can just type yolo what is my name?
-  # without having to put the question between ''
-  arguments = sys.argv[command_start_idx:]
-  user_prompt = " ".join(arguments)
-
-def call_open_ai(query):
-  # do we have a prompt from the user?
-  if query == "":
-      print ("No user prompt specified.")
-      sys.exit(-1)
- 
-  # Load the correct prompt based on Shell and OS and append the user's prompt
-  prompt = get_full_prompt(query, shell)
-
-  # Make the first line also the system prompt
-  system_prompt = prompt[1]
-  #print(prompt)
-
-  # Call the ChatGPT API
-  response = openai.ChatCompletion.create(
-    model=config["model"],
-    messages=[
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": prompt}
-    ],
-    temperature=config["temperature"],
-    max_tokens=config["max_tokens"],
-  )
- 
-  return response.choices[0].message.content.strip()
-
 
 #Enable color output on Windows using colorama
 init() 
@@ -173,8 +105,8 @@ def missing_posix_display():
   display = subprocess.check_output("echo $DISPLAY", shell=True)
   return display == b'\n'
 
-def prompt_user_input(response):
-  print("Command: " + colored(response, 'blue'))
+def prompt_user_input(response, config):
+  print("Command: " + colored(response, 'green'))
   #print(config["safety"])
 
   if bool(config["safety"]) == True or ask_flag == True:
@@ -188,7 +120,7 @@ def prompt_user_input(response):
   if config["safety"] == False:
      return "Y"
 
-def evaluate_input(user_input, command):
+def evaluate_input(user_input, command, shell):
   if user_input.upper() == "Y" or user_input == "":
     if shell == "powershell.exe":
       subprocess.run([shell, "/c", command], shell=False)  
@@ -204,7 +136,7 @@ def evaluate_input(user_input, command):
     check_for_markdown(modded_response)
     modded_user_input = prompt_user_input(modded_response)
     print()
-    evaluate_input(modded_user_input, modded_response)
+    evaluate_input(modded_user_input, modded_response, shell)
   
   if user_input.upper() == "C":
       if os.name == "posix" and missing_posix_display():
@@ -212,9 +144,67 @@ def evaluate_input(user_input, command):
       pyperclip.copy(command) 
       print("Copied command to clipboard.")
 
-res_command = call_open_ai(user_prompt) 
-check_for_issue(res_command)
-check_for_markdown(res_command)
-user_input = prompt_user_input(res_command)
-print()
-evaluate_input(user_input, res_command)
+
+def main():
+  config = read_config()
+  set_api_key()
+
+  # Unix based SHELL (/bin/bash, /bin/zsh), otherwise assuming it's Windows
+  shell = os.environ.get("SHELL", "powershell.exe") 
+
+  command_start_idx  = 1     # Question starts at which argv index?
+  ask_flag = False           # safety switch -a command line argument
+  yolo = ""                  # user's answer to safety switch (-a) question y/n
+
+  # Parse arguments and make sure we have at least a single word
+  if len(sys.argv) < 2:
+    sys.exit(-1)
+
+  # Safety switch via argument -a (local override of global setting)
+  # Force Y/n questions before running the command
+  if sys.argv[1] == "-a":
+    ask_flag = True
+    command_start_idx = 2
+
+  # To allow easy/natural use we don't require the input to be a 
+  # single string. So, the user can just type yolo what is my name?
+  # without having to put the question between ''
+  arguments = sys.argv[command_start_idx:]
+  user_prompt = " ".join(arguments)
+
+  def call_open_ai(query):
+    # do we have a prompt from the user?
+    if query == "":
+        print ("No user prompt specified.")
+        sys.exit(-1)
+  
+    # Load the correct prompt based on Shell and OS and append the user's prompt
+    prompt = get_full_prompt(query, shell)
+
+    # Make the first line also the system prompt
+    system_prompt = prompt[1]
+    #print(prompt)
+
+    # Call the ChatGPT API
+    response = openai.ChatCompletion.create(
+      model=config["model"],
+      messages=[
+          {"role": "system", "content": system_prompt},
+          {"role": "user", "content": prompt}
+      ],
+      temperature=config["temperature"],
+      max_tokens=config["max_tokens"],
+    )
+  
+    return response.choices[0].message.content.strip()
+  
+  res_command = call_open_ai(user_prompt) 
+  check_for_issue(res_command)
+  check_for_markdown(res_command)
+  user_input = prompt_user_input(res_command, config)
+  print()
+  evaluate_input(user_input, res_command, shell)
+
+if __name__ == "__main__":
+  main()
+
