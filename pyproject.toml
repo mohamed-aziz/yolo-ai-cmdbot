@@ -11,13 +11,13 @@ yolo = 'src.yolo:main'
 
 [tool.poetry.dependencies]
 python = "^3.10"
-openai = "0.27"
 termcolor = "2.2.0"
 colorama = "0.4.4"
 python-dotenv = "1.0.0"
 distro = "1.7.0"
-pyyaml = "5.4.1"
+pyyaml = "6.0.1"
 pyperclip = "1.8.2"
+litellm = "^1.14.1"
 
 
 [build-system]
